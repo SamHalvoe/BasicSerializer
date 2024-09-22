@@ -1,0 +1,35 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35303.130
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BasicSerializer", "BasicSerializer\BasicSerializer.vcxproj", "{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|ARM = Debug|ARM
+		Debug|ARM64 = Debug|ARM64
+		Release|ARM = Release|ARM
+		Release|ARM64 = Release|ARM64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Debug|ARM.ActiveCfg = Debug|ARM
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Debug|ARM.Build.0 = Debug|ARM
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Debug|ARM.Deploy.0 = Debug|ARM
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Debug|ARM64.Build.0 = Debug|ARM64
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Debug|ARM64.Deploy.0 = Debug|ARM64
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Release|ARM.ActiveCfg = Release|ARM
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Release|ARM.Build.0 = Release|ARM
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Release|ARM.Deploy.0 = Release|ARM
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Release|ARM64.ActiveCfg = Release|ARM64
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Release|ARM64.Build.0 = Release|ARM64
+		{DEE9A662-EA60-42D3-8F24-F97B9BDB3BA1}.Release|ARM64.Deploy.0 = Release|ARM64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {914A7AB9-D40C-402C-B7B5-AB5973589B8E}
+	EndGlobalSection
+EndGlobal
