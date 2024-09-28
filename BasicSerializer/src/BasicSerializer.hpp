@@ -7,8 +7,9 @@
 #include <cstring>
 
 // **** **** **** ****
-// NOTE: All XxxReference types are only valid until your underlying buffer (of uint8_t*) expires.
-//       When the underlying buffer is gone, use of XxxReference types will cause undefined behaviour!
+// NOTE: Serializer, Deserializer, SerializerReference and DeserializerReference are only
+//       valid until your underlying buffer (of uint8_t*) expires.
+//       When the underlying buffer is gone, use of these types will cause undefined behaviour!
 // **** **** **** ****
 
 namespace halvoe
