@@ -61,7 +61,7 @@ namespace halvoe
       }
   };
 
-  template<size_t tc_size>
+  template<size_t tc_bufferSize>
   class Serializer
   {
     private:
@@ -72,12 +72,12 @@ namespace halvoe
       Serializer() = delete;
       Serializer(uint8_t* out_begin) : m_begin(out_begin)
       {}
-      Serializer(std::array<uint8_t, tc_size>& out_array) : m_begin(out_array.data())
+      Serializer(std::array<uint8_t, tc_bufferSize>& out_array) : m_begin(out_array.data())
       {}
 
-      constexpr size_t getSize() const
+      constexpr size_t getBufferSize() const
       {
-        return tc_size;
+        return tc_bufferSize;
       }
 
       size_t getBytesWritten() const
@@ -87,26 +87,26 @@ namespace halvoe
       
       size_t getBytesLeft() const
       {
-        return tc_size - m_cursor;
+        return tc_bufferSize - m_cursor;
       }
 
-      bool isInBounds(size_t in_size) const
+      bool fitsInBuffer(size_t in_size) const
       {
-        return m_cursor + in_size <= tc_size;
+        return m_cursor + in_size <= tc_bufferSize;
       }
       
       template<typename Type>
-      bool isInBounds() const
+      bool fitsInBuffer() const
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        return m_cursor + sizeof(Type) <= tc_size;
+        return m_cursor + sizeof(Type) <= tc_bufferSize;
       }
 
       template<typename Type>
       SerializerReference<Type> skip()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_size) { return SerializerReference<Type>(); }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { return SerializerReference<Type>(); }
         
         SerializerReference<Type> element(reinterpret_cast<Type*>(m_begin + m_cursor));
         m_cursor = m_cursor + sizeof(Type);
@@ -117,7 +117,7 @@ namespace halvoe
       bool write(Type in_value)
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_size) { return false; }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { return false; }
 
         *reinterpret_cast<Type*>(m_begin + m_cursor) = in_value;
         m_cursor = m_cursor + sizeof(Type);
@@ -128,7 +128,7 @@ namespace halvoe
       bool write(const char* in_string, SizeType in_size)
       {
         static_assert(isSizeType<SizeType>(), "SizeType must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_size > tc_size) { return false; }
+        if (m_cursor + sizeof(SizeType) + in_size > tc_bufferSize) { return false; }
         
         write<SizeType>(in_size);
         std::memcpy(m_begin, in_string, in_size);
@@ -165,7 +165,7 @@ namespace halvoe
       }
   };
   
-  template<size_t tc_size>
+  template<size_t tc_bufferSize>
   class Deserializer
   {
     private:
@@ -184,12 +184,12 @@ namespace halvoe
       Deserializer() = delete;
       Deserializer(const uint8_t* in_begin) : m_begin(in_begin)
       {}
-      Deserializer(const std::array<uint8_t, tc_size>& in_array) : m_begin(in_array.data())
+      Deserializer(const std::array<uint8_t, tc_bufferSize>& in_array) : m_begin(in_array.data())
       {}
 
-      constexpr size_t getSize() const
+      constexpr size_t getBufferSize() const
       {
-        return tc_size;
+        return tc_bufferSize;
       }
 
       size_t getBytesRead() const
@@ -199,26 +199,26 @@ namespace halvoe
       
       size_t getBytesLeft() const
       {
-        return tc_size - m_cursor;
+        return tc_bufferSize - m_cursor;
       }
 
-      bool isInBounds(size_t in_size) const
+      bool fitsInBuffer(size_t in_size) const
       {
-        return m_cursor + in_size <= tc_size;
+        return m_cursor + in_size <= tc_bufferSize;
       }
 
       template<typename Type>
-      bool isInBounds() const
+      bool fitsInBuffer() const
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        return m_cursor + sizeof(Type) <= tc_size;
+        return m_cursor + sizeof(Type) <= tc_bufferSize;
       }
 
       template<typename Type>
       bool skip()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_size) { return false; }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { return false; }
 
         m_cursor = m_cursor + sizeof(Type);
         return true;
@@ -228,7 +228,7 @@ namespace halvoe
       Type read()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_size) { return std::numeric_limits<Type>::max(); }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { return std::numeric_limits<Type>::max(); }
         
         Type value = *reinterpret_cast<const Type*>(m_begin + m_cursor);
         m_cursor = m_cursor + sizeof(Type);
@@ -239,7 +239,7 @@ namespace halvoe
       const DeserializerReference<Type> view()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_size) { return DeserializerReference<Type>(); }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { return DeserializerReference<Type>(); }
         
         DeserializerReference<Type> element(reinterpret_cast<const Type*>(m_begin + m_cursor));
         m_cursor = m_cursor + sizeof(Type);
@@ -250,7 +250,7 @@ namespace halvoe
       std::unique_ptr<const char[]> read(SizeType in_maxStringSize, SizeType& out_stringSize)
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_size) { return getNullString(); }
+        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return getNullString(); }
         
         auto sizeElement = view<SizeType>();
         if (sizeElement.isNull()) { return getNullString(); }
@@ -268,7 +268,7 @@ namespace halvoe
       std::unique_ptr<const char[]> read(SizeType in_maxStringSize)
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_size) { return getNullString(); }
+        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return getNullString(); }
         
         auto sizeElement = view<SizeType>();
         if (sizeElement.isNull()) { return getNullString(); }
