@@ -123,6 +123,18 @@ namespace halvoe
         m_cursor = m_cursor + sizeof(Type);
         return true;
       }
+
+      template<typename Type>
+      bool writeEnum(Type in_value)
+      {
+        using UnderlyingType = std::underlying_type<Type>::type;
+        static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
+        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { return false; }
+
+        *reinterpret_cast<UnderlyingType*>(m_begin + m_cursor) = static_cast<UnderlyingType>(in_value);
+        m_cursor = m_cursor + sizeof(UnderlyingType);
+        return true;
+      }
       
       template<typename SizeType>
       bool write(const char* in_string, SizeType in_size)
@@ -233,6 +245,18 @@ namespace halvoe
         Type value = *reinterpret_cast<const Type*>(m_begin + m_cursor);
         m_cursor = m_cursor + sizeof(Type);
         return value;
+      }
+
+      template<typename Type>
+      Type readEnum()
+      {
+        using UnderlyingType = std::underlying_type<Type>::type;
+        static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
+        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { return Type{ std::numeric_limits<UnderlyingType>::max() }; }
+        
+        UnderlyingType value = *reinterpret_cast<const UnderlyingType*>(m_begin + m_cursor);
+        m_cursor = m_cursor + sizeof(UnderlyingType);
+        return Type{ value };
       }
       
       template<typename Type>
