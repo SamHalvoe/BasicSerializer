@@ -127,7 +127,7 @@ namespace halvoe
       template<typename Type>
       bool writeEnum(Type in_value)
       {
-        using UnderlyingType = std::underlying_type<Type>::type;
+        using UnderlyingType = typename std::underlying_type<Type>::type;
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
         if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { return false; }
 
@@ -250,7 +250,7 @@ namespace halvoe
       template<typename Type>
       Type readEnum()
       {
-        using UnderlyingType = std::underlying_type<Type>::type;
+        using UnderlyingType = typename std::underlying_type<Type>::type;
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
         if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { return Type{ std::numeric_limits<UnderlyingType>::max() }; }
         
