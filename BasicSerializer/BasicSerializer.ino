@@ -6,27 +6,20 @@
     Author:     LAPTOP-8TKMEDGB\samue
 */
 
-// Define User Types below here or use a .h file
-//
+#include "BasicSerializer.hpp"
 
-
-// Define Function Prototypes that use User Types below here or use a .h file
-//
-
-
-// Define Functions below here or use other .ino or cpp files
-//
+const size_t bufferSize = 256;
+std::array<uint8_t, bufferSize> buffer;
 
 // The setup() function runs once each time the micro-controller starts
 void setup()
 {
-
-
+  halvoe::Serializer<bufferSize> serializer(buffer);
+  halvoe::Deserializer<bufferSize> deserializer(buffer);
 }
 
 // Add the main program code into the continuous loop() function
 void loop()
 {
-
 
 }

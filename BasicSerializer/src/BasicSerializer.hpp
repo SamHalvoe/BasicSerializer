@@ -28,19 +28,17 @@ namespace halvoe
   template<typename Type>
   class SerializerReference
   {
+    static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
+    
     private:
       Type* m_element;
     
     public:
       SerializerReference() : m_element(nullptr)
-      {
-        static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-      }
+      {}
       
       SerializerReference(Type* in_element) : m_element(in_element)
-      {
-        static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-      }
+      {}
       
       bool isNull() const
       {
@@ -142,19 +140,17 @@ namespace halvoe
   template<typename Type>
   class DeserializerReference
   {
+    static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
+    
     private:
       const Type* m_element;
     
     public:
       DeserializerReference() : m_element(nullptr)
-      {
-        static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-      }
+      {}
       
       DeserializerReference(const Type* in_element) : m_element(in_element)
-      {
-        static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-      }
+      {}
       
       bool isNull() const
       {
@@ -177,11 +173,11 @@ namespace halvoe
       size_t m_cursor = 0;
       
     private:
-      std::unique_ptr<const char[]> getInvalidString()
+      std::unique_ptr<const char[]> getNullString()
       {
-        auto invalidString = std::make_unique<char[]>(1);
-        invalidString[0] = '\0';
-        return invalidString;
+        auto nullString = std::make_unique<char[]>(1);
+        nullString[0] = '\0';
+        return nullString;
       }
 
     public:
@@ -254,10 +250,10 @@ namespace halvoe
       std::unique_ptr<const char[]> read(SizeType in_maxStringSize, SizeType& out_stringSize)
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tp_size) { return getInvalidString(); }
+        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tp_size) { return getNullString(); }
         
         auto sizeElement = view<SizeType>();
-        if (sizeElement.isNull()) { return getInvalidString(); }
+        if (sizeElement.isNull()) { return getNullString(); }
         const SizeType size = sizeElement.read() < in_maxStringSize ? sizeElement.read() : in_maxStringSize - 1; 
         
         auto string = std::make_unique<char[]>(size + 1);
@@ -272,10 +268,10 @@ namespace halvoe
       std::unique_ptr<const char[]> read(SizeType in_maxStringSize)
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tp_size) { return getInvalidString(); }
+        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tp_size) { return getNullString(); }
         
         auto sizeElement = view<SizeType>();
-        if (sizeElement.isNull()) { return getInvalidString(); }
+        if (sizeElement.isNull()) { return getNullString(); }
         const SizeType size = sizeElement.read() < in_maxStringSize ? sizeElement.read() : in_maxStringSize - 1; 
         
         auto string = std::make_unique<char[]>(size + 1);
