@@ -90,6 +90,26 @@ namespace halvoe
         return tc_bufferSize - m_cursor;
       }
 
+      uint8_t* getBuffer()
+      {
+        return m_begin;
+      }
+
+      const uint8_t* getBuffer() const
+      {
+        return m_begin;
+      }
+
+      uint8_t* getBufferWithOffset()
+      {
+        return m_begin + m_cursor;
+      }
+
+      const uint8_t* getBufferWithOffset() const
+      {
+        return m_begin + m_cursor;
+      }
+
       bool fitsInBuffer(size_t in_size) const
       {
         return m_cursor + in_size <= tc_bufferSize;
@@ -143,7 +163,7 @@ namespace halvoe
         if (m_cursor + sizeof(SizeType) + in_size > tc_bufferSize) { return false; }
         
         write<SizeType>(in_size);
-        std::memcpy(m_begin, in_string, in_size);
+        std::memcpy(m_begin + m_cursor, in_string, in_size);
         m_cursor = m_cursor + in_size;
         return true;
       }
@@ -212,6 +232,16 @@ namespace halvoe
       size_t getBytesLeft() const
       {
         return tc_bufferSize - m_cursor;
+      }
+
+      const uint8_t* getBuffer() const
+      {
+        return m_begin;
+      }
+
+      const uint8_t* getBufferWithOffset() const
+      {
+        return m_begin + m_cursor;
       }
 
       bool fitsInBuffer(size_t in_size) const
