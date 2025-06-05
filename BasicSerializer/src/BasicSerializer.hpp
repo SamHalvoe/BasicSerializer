@@ -24,6 +24,12 @@ namespace halvoe
             std::is_same<SizeType, uint32_t>::value ||
             std::is_same<SizeType, uint64_t>::value);
   }
+
+  enum class SerializerStatus : uint8_t
+  {
+    ok = 0,
+    writeOutOfRange
+  };
   
   template<typename Type>
   class SerializerReference
@@ -65,8 +71,9 @@ namespace halvoe
   class Serializer
   {
     private:
-      uint8_t* m_begin;
       size_t m_cursor = 0;
+      uint8_t* m_begin;
+      SerializerStatus m_status = SerializerStatus::ok;
 
     public:
       Serializer() = delete;
@@ -74,6 +81,11 @@ namespace halvoe
       {}
       Serializer(std::array<uint8_t, tc_bufferSize>& out_array) : m_begin(out_array.data())
       {}
+
+      SerializerStatus getStatus() const
+      {
+        return m_status;
+      }
 
       constexpr size_t getBufferSize() const
       {
@@ -126,7 +138,7 @@ namespace halvoe
       SerializerReference<Type> skip()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return SerializerReference<Type>(); }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { m_status = SerializerStatus::writeOutOfRange; return SerializerReference<Type>(); }
         
         SerializerReference<Type> element(reinterpret_cast<Type*>(m_begin + m_cursor));
         m_cursor = m_cursor + sizeof(Type);
@@ -137,7 +149,7 @@ namespace halvoe
       bool write(Type in_value)
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return false; }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { m_status = SerializerStatus::writeOutOfRange; return false; }
 
         *reinterpret_cast<Type*>(m_begin + m_cursor) = in_value;
         m_cursor = m_cursor + sizeof(Type);
@@ -149,7 +161,7 @@ namespace halvoe
       {
         using UnderlyingType = typename std::underlying_type<Type>::type;
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
-        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { return false; }
+        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { m_status = SerializerStatus::writeOutOfRange; return false; }
 
         *reinterpret_cast<UnderlyingType*>(m_begin + m_cursor) = static_cast<UnderlyingType>(in_value);
         m_cursor = m_cursor + sizeof(UnderlyingType);
@@ -160,13 +172,22 @@ namespace halvoe
       bool write(const char* in_string, SizeType in_size)
       {
         static_assert(isSizeType<SizeType>(), "SizeType must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_size > tc_bufferSize) { return false; }
+        if (m_cursor + sizeof(SizeType) + in_size > tc_bufferSize) { m_status = SerializerStatus::writeOutOfRange; return false; }
         
         write<SizeType>(in_size);
         std::memcpy(m_begin + m_cursor, in_string, in_size);
         m_cursor = m_cursor + in_size;
         return true;
       }
+  };
+
+  enum class DeserializerStatus : uint8_t
+  {
+    ok = 0,
+    readOutOfRange,
+    viewOutOfRange,
+    readStringOutOfRange,
+    viewStringSizeOutOfRange
   };
   
   template<typename Type>
@@ -201,8 +222,9 @@ namespace halvoe
   class Deserializer
   {
     private:
-      const uint8_t* m_begin;
       size_t m_cursor = 0;
+      const uint8_t* m_begin;
+      DeserializerStatus m_status = DeserializerStatus::ok;
       
     private:
       std::unique_ptr<const char[]> getNullString()
@@ -218,6 +240,11 @@ namespace halvoe
       {}
       Deserializer(const std::array<uint8_t, tc_bufferSize>& in_array) : m_begin(in_array.data())
       {}
+      
+      DeserializerStatus getStatus() const
+      {
+        return m_status;
+      }
 
       constexpr size_t getBufferSize() const
       {
@@ -260,7 +287,7 @@ namespace halvoe
       bool skip()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return false; }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { m_status = DeserializerStatus::readOutOfRange; return false; }
 
         m_cursor = m_cursor + sizeof(Type);
         return true;
@@ -270,7 +297,7 @@ namespace halvoe
       Type read()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return std::numeric_limits<Type>::max(); }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { m_status = DeserializerStatus::readOutOfRange; return std::numeric_limits<Type>::max(); }
         
         Type value = *reinterpret_cast<const Type*>(m_begin + m_cursor);
         m_cursor = m_cursor + sizeof(Type);
@@ -282,7 +309,7 @@ namespace halvoe
       {
         using UnderlyingType = typename std::underlying_type<Type>::type;
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
-        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { return Type{ std::numeric_limits<UnderlyingType>::max() }; }
+        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { m_status = DeserializerStatus::readOutOfRange; return Type{ std::numeric_limits<UnderlyingType>::max() }; }
         
         UnderlyingType value = *reinterpret_cast<const UnderlyingType*>(m_begin + m_cursor);
         m_cursor = m_cursor + sizeof(UnderlyingType);
@@ -293,7 +320,7 @@ namespace halvoe
       const DeserializerReference<Type> view()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return DeserializerReference<Type>(); }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { m_status = DeserializerStatus::viewOutOfRange; return DeserializerReference<Type>(); }
         
         DeserializerReference<Type> element(reinterpret_cast<const Type*>(m_begin + m_cursor));
         m_cursor = m_cursor + sizeof(Type);
@@ -301,13 +328,13 @@ namespace halvoe
       }
       
       template<typename SizeType>
-      std::unique_ptr<const char[]> read(SizeType in_maxStringSize, SizeType& out_stringSize)
+      std::unique_ptr<const char[]> read(SizeType in_maxStringSize, SizeType& out_stringSize) // ToDo: Remove "std::unique_ptr<const char[]>" and replace it with parameter "char* out_buffer" and return "SizeType out_stringSize"!
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return getNullString(); }
+        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { m_status = DeserializerStatus::readStringOutOfRange; return getNullString(); }
         
         auto sizeElement = view<SizeType>();
-        if (sizeElement.isNull()) { return getNullString(); }
+        if (sizeElement.isNull()) { m_status = DeserializerStatus::viewStringSizeOutOfRange; return getNullString(); }
         const SizeType size = sizeElement.read() < in_maxStringSize ? sizeElement.read() : in_maxStringSize - 1; 
         
         auto string = std::make_unique<char[]>(size + 1);
@@ -319,13 +346,13 @@ namespace halvoe
       }
       
       template<typename SizeType>
-      std::unique_ptr<const char[]> read(SizeType in_maxStringSize)
+      std::unique_ptr<const char[]> read(SizeType in_maxStringSize) // ToDo: Remove "std::unique_ptr<const char[]>" and replace it with parameter "char* out_buffer" and return "SizeType out_stringSize"!
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return getNullString(); }
+        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { m_status = DeserializerStatus::readStringOutOfRange; return getNullString(); }
         
         auto sizeElement = view<SizeType>();
-        if (sizeElement.isNull()) { return getNullString(); }
+        if (sizeElement.isNull()) { m_status = DeserializerStatus::viewStringSizeOutOfRange; return getNullString(); }
         const SizeType size = sizeElement.read() < in_maxStringSize ? sizeElement.read() : in_maxStringSize - 1; 
         
         auto string = std::make_unique<char[]>(size + 1);
