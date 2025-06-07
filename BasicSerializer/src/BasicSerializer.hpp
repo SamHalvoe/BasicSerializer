@@ -1,16 +1,15 @@
 #pragma once
 
 #include <type_traits>
-#include <limits>
-#include <array>
-#include <memory>
 #include <cstring>
 
-// **** **** **** ****
+// **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
+//
 // NOTE: Serializer, Deserializer, SerializerReference and DeserializerReference are only
 //       valid until your underlying buffer (of uint8_t*) expires.
 //       When the underlying buffer is gone, use of these types will cause undefined behaviour!
-// **** **** **** ****
+//
+// **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
 
 namespace halvoe
 {
@@ -53,7 +52,7 @@ namespace halvoe
       
       Type read() const
       {
-        if (m_element == nullptr) { return std::numeric_limits<Type>::max(); }
+        if (m_element == nullptr) { return 0; }
         
         return *m_element;
       }
@@ -78,8 +77,6 @@ namespace halvoe
     public:
       Serializer() = delete;
       Serializer(uint8_t* out_begin) : m_begin(out_begin)
-      {}
-      Serializer(std::array<uint8_t, tc_bufferSize>& out_array) : m_begin(out_array.data())
       {}
 
       SerializerStatus getStatus() const
@@ -187,7 +184,8 @@ namespace halvoe
     readOutOfRange,
     viewOutOfRange,
     readStringOutOfRange,
-    viewStringSizeOutOfRange
+    viewStringSizeOutOfRange,
+    readStringOutIsNullptr
   };
   
   template<typename Type>
@@ -212,7 +210,7 @@ namespace halvoe
       
       Type read() const
       {
-        if (m_element == nullptr) { return std::numeric_limits<Type>::max(); }
+        if (m_element == nullptr) { return 0; }
         
         return *m_element;
       }
@@ -225,20 +223,10 @@ namespace halvoe
       size_t m_cursor = 0;
       const uint8_t* m_begin;
       DeserializerStatus m_status = DeserializerStatus::ok;
-      
-    private:
-      std::unique_ptr<const char[]> getNullString()
-      {
-        auto nullString = std::make_unique<char[]>(1);
-        nullString[0] = '\0';
-        return nullString;
-      }
 
     public:
       Deserializer() = delete;
       Deserializer(const uint8_t* in_begin) : m_begin(in_begin)
-      {}
-      Deserializer(const std::array<uint8_t, tc_bufferSize>& in_array) : m_begin(in_array.data())
       {}
       
       DeserializerStatus getStatus() const
@@ -297,7 +285,7 @@ namespace halvoe
       Type read()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { m_status = DeserializerStatus::readOutOfRange; return std::numeric_limits<Type>::max(); }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { m_status = DeserializerStatus::readOutOfRange; return 0; }
         
         Type value = *reinterpret_cast<const Type*>(m_begin + m_cursor);
         m_cursor = m_cursor + sizeof(Type);
@@ -309,7 +297,7 @@ namespace halvoe
       {
         using UnderlyingType = typename std::underlying_type<Type>::type;
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
-        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { m_status = DeserializerStatus::readOutOfRange; return Type{ std::numeric_limits<UnderlyingType>::max() }; }
+        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { m_status = DeserializerStatus::readOutOfRange; return Type{ 0 }; }
         
         UnderlyingType value = *reinterpret_cast<const UnderlyingType*>(m_begin + m_cursor);
         m_cursor = m_cursor + sizeof(UnderlyingType);
@@ -328,38 +316,20 @@ namespace halvoe
       }
       
       template<typename SizeType>
-      std::unique_ptr<const char[]> read(SizeType in_maxStringSize, SizeType& out_stringSize) // ToDo: Remove "std::unique_ptr<const char[]>" and replace it with parameter "char* out_buffer" and return "SizeType out_stringSize"!
+      SizeType read(SizeType in_maxStringSize, char* out_string)
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { m_status = DeserializerStatus::readStringOutOfRange; return getNullString(); }
+        if (out_string == nullptr) { m_status = DeserializerStatus::readStringOutIsNullptr; return 0; }
+        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { m_status = DeserializerStatus::readStringOutOfRange; return 0; }
         
         auto sizeElement = view<SizeType>();
-        if (sizeElement.isNull()) { m_status = DeserializerStatus::viewStringSizeOutOfRange; return getNullString(); }
+        if (sizeElement.isNull()) { m_status = DeserializerStatus::viewStringSizeOutOfRange; return 0; }
         const SizeType size = sizeElement.read() < in_maxStringSize ? sizeElement.read() : in_maxStringSize - 1; 
         
-        auto string = std::make_unique<char[]>(size + 1);
-        std::memcpy(string.get(), m_begin + m_cursor, size);
-        string[size] = '\0';
-        out_stringSize = size;
+        std::memcpy(out_string, m_begin + m_cursor, size);
+        out_string[size] = '\0';
         m_cursor = m_cursor + size;
-        return string;
-      }
-      
-      template<typename SizeType>
-      std::unique_ptr<const char[]> read(SizeType in_maxStringSize) // ToDo: Remove "std::unique_ptr<const char[]>" and replace it with parameter "char* out_buffer" and return "SizeType out_stringSize"!
-      {
-        static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { m_status = DeserializerStatus::readStringOutOfRange; return getNullString(); }
-        
-        auto sizeElement = view<SizeType>();
-        if (sizeElement.isNull()) { m_status = DeserializerStatus::viewStringSizeOutOfRange; return getNullString(); }
-        const SizeType size = sizeElement.read() < in_maxStringSize ? sizeElement.read() : in_maxStringSize - 1; 
-        
-        auto string = std::make_unique<char[]>(size + 1);
-        std::memcpy(string.get(), m_begin + m_cursor, size);
-        string[size] = '\0';
-        m_cursor = m_cursor + size;
-        return string;
+        return size;
       }
   };
 }
