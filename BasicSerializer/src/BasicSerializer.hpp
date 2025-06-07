@@ -1,6 +1,7 @@
 #pragma once
 
 #include <type_traits>
+#include <functional>
 #include <cstring>
 
 // **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
@@ -34,6 +35,7 @@ namespace halvoe
   class SerializerReference
   {
     static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
+    static_assert(not std::is_enum<Type>::value, "Type must not be an enum!");
     
     private:
       Type* m_element;
@@ -185,13 +187,16 @@ namespace halvoe
     viewOutOfRange,
     readStringOutOfRange,
     viewStringSizeOutOfRange,
-    readStringOutIsNullptr
+    readStringOutIsNullptr,
+    readEnumOutIsNullptr,
+    readEnumFunIsNullptr
   };
   
   template<typename Type>
   class DeserializerReference
   {
     static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
+    static_assert(not std::is_enum<Type>::value, "Type must not be an enum!");
     
     private:
       const Type* m_element;
@@ -292,16 +297,20 @@ namespace halvoe
         return value;
       }
 
-      template<typename Type>
-      Type readEnum()
+      template<typename Type, typename UnderlyingType = typename std::underlying_type<Type>::type>
+      bool readEnum(Type* out_value, const std::function<bool(UnderlyingType)>& fun_isValueValidEnumValue)
       {
-        using UnderlyingType = typename std::underlying_type<Type>::type;
+        static_assert(std::is_same<UnderlyingType, typename std::underlying_type<Type>::type>::value);
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
-        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { m_status = DeserializerStatus::readOutOfRange; return Type{ 0 }; }
+        if (out_value == nullptr) { m_status = DeserializerStatus::readEnumOutIsNullptr; return false; }
+        if (fun_isValueValidEnumValue == nullptr) { m_status = DeserializerStatus::readEnumFunIsNullptr; return false; }
+        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { m_status = DeserializerStatus::readOutOfRange; return false; }
         
         UnderlyingType value = *reinterpret_cast<const UnderlyingType*>(m_begin + m_cursor);
+        if (not fun_isValueValidEnumValue(value)) { return false; }
+        *out_value = static_cast<Type>(value);
         m_cursor = m_cursor + sizeof(UnderlyingType);
-        return Type{ value };
+        return true;
       }
       
       template<typename Type>
