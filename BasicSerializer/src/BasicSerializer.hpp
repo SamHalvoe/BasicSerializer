@@ -298,17 +298,17 @@ namespace halvoe
       }
 
       template<typename Type, typename UnderlyingType = typename std::underlying_type<Type>::type>
-      bool readEnum(Type* out_value, const std::function<bool(UnderlyingType)>& fun_isValueValidEnumValue)
+      bool readEnum(Type& out_value, const std::function<bool(UnderlyingType)>& fun_isEnumValue)
       {
-        static_assert(std::is_same<UnderlyingType, typename std::underlying_type<Type>::type>::value);
+        static_assert(std::is_same<UnderlyingType, typename std::underlying_type_t<Type>>::value, "UnderlyingType is not underlying type of Type!");
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
         if (out_value == nullptr) { m_status = DeserializerStatus::readEnumOutIsNullptr; return false; }
         if (fun_isValueValidEnumValue == nullptr) { m_status = DeserializerStatus::readEnumFunIsNullptr; return false; }
         if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { m_status = DeserializerStatus::readOutOfRange; return false; }
         
         UnderlyingType value = *reinterpret_cast<const UnderlyingType*>(m_begin + m_cursor);
-        if (not fun_isValueValidEnumValue(value)) { return false; }
-        *out_value = static_cast<Type>(value);
+        if (not fun_isEnumValue(value)) { return false; }
+        out_value = static_cast<Type>(value);
         m_cursor = m_cursor + sizeof(UnderlyingType);
         return true;
       }
