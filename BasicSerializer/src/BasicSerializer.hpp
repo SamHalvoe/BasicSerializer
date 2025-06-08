@@ -188,8 +188,7 @@ namespace halvoe
     readStringOutOfRange,
     viewStringSizeOutOfRange,
     readStringOutIsNullptr,
-    readEnumOutIsNullptr,
-    readEnumFunIsNullptr
+    readIsEnumFunIsNullptr
   };
   
   template<typename Type>
@@ -302,8 +301,7 @@ namespace halvoe
       {
         static_assert(std::is_same<UnderlyingType, typename std::underlying_type_t<Type>>::value, "UnderlyingType is not underlying type of Type!");
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
-        if (out_value == nullptr) { m_status = DeserializerStatus::readEnumOutIsNullptr; return false; }
-        if (fun_isValueValidEnumValue == nullptr) { m_status = DeserializerStatus::readEnumFunIsNullptr; return false; }
+        if (fun_isEnumValue == nullptr) { m_status = DeserializerStatus::readIsEnumFunIsNullptr; return false; }
         if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { m_status = DeserializerStatus::readOutOfRange; return false; }
         
         UnderlyingType value = *reinterpret_cast<const UnderlyingType*>(m_begin + m_cursor);
