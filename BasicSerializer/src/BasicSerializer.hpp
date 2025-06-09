@@ -38,7 +38,7 @@ namespace halvoe
     static_assert(not std::is_enum<Type>::value, "Type must not be an enum!");
     
     private:
-      Type* m_element;
+      Type* m_element; // ToDo: Maybe change to "Type* const"?!?
     
     public:
       SerializerReference() : m_element(nullptr)
@@ -73,13 +73,19 @@ namespace halvoe
   {
     private:
       size_t m_cursor = 0;
-      uint8_t* m_begin;
+      uint8_t* m_begin; // ToDo: Maybe change to "uint8_t* const"?!?
       SerializerStatus m_status = SerializerStatus::ok;
 
     public:
       Serializer() = delete;
       Serializer(uint8_t* out_begin) : m_begin(out_begin)
       {}
+      
+      void reset()
+      {
+        m_cursor = 0;
+        m_status = SerializerStatus::ok;
+      }
 
       SerializerStatus getStatus() const
       {
@@ -198,7 +204,7 @@ namespace halvoe
     static_assert(not std::is_enum<Type>::value, "Type must not be an enum!");
     
     private:
-      const Type* m_element;
+      const Type* m_element; // ToDo: Maybe change to "const Type* const"?!?
     
     public:
       DeserializerReference() : m_element(nullptr)
@@ -225,13 +231,19 @@ namespace halvoe
   {
     private:
       size_t m_cursor = 0;
-      const uint8_t* m_begin;
+      const uint8_t* m_begin; // ToDo: Maybe change to "const uint8_t* const"?!?
       DeserializerStatus m_status = DeserializerStatus::ok;
 
     public:
       Deserializer() = delete;
       Deserializer(const uint8_t* in_begin) : m_begin(in_begin)
       {}
+      
+      void reset()
+      {
+        m_cursor = 0;
+        m_status = DeserializerStatus::ok;
+      }
       
       DeserializerStatus getStatus() const
       {
