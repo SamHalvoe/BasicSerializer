@@ -8,7 +8,9 @@
 
 #include "./src/BasicSerializer.hpp"
 
-const size_t bufferSize = 256;
+using namespace halvoe;
+
+const size_t bufferSize = 8;
 std::array<uint8_t, bufferSize> buffer;
 
 // The setup() function runs once each time the micro-controller starts
@@ -18,17 +20,58 @@ void setup()
   while (not Serial);
   Serial.println("Enter setup...");
 
-  halvoe::Serializer<bufferSize> serializer(buffer.data());
+  // ---- Test: Serializer
+
+  Serializer<bufferSize> serializer(buffer.data());
   serializer.write<uint8_t>(8);
   auto ref = serializer.skip<uint16_t>();
   if (ref.has_value())
   {
-    ref.value().write(512);
+    ref.value().write(1024);
   }
+  
+  Serial.println(StatusPrinter::message(serializer.write<uint32_t>(32)));
+  Serial.println(StatusPrinter::message(serializer.write<uint32_t>(32)));
+  
+  // ---- Test: Deserializer
 
   halvoe::Deserializer<bufferSize> deserializer(buffer.data());
-  Serial.println(deserializer.read<uint8_t>());
-  Serial.println(deserializer.read<uint16_t>());
+  
+  if (auto result = deserializer.read<uint8_t>(); result.has_value())
+  {
+    Serial.println(result.value());
+  }
+  else
+  {
+    Serial.println(StatusPrinter::message(result.error()));
+  }
+
+  if (auto result = deserializer.read<uint16_t>(); result.has_value())
+  {
+    Serial.println(result.value());
+  }
+  else
+  {
+    Serial.println(StatusPrinter::message(result.error()));
+  }
+
+  if (auto result = deserializer.read<uint32_t>(); result.has_value())
+  {
+    Serial.println(result.value());
+  }
+  else
+  {
+    Serial.println(StatusPrinter::message(result.error()));
+  }
+
+  if (auto result = deserializer.read<uint32_t>(); result.has_value())
+  {
+    Serial.println(result.value());
+  }
+  else
+  {
+    Serial.println(StatusPrinter::message(result.error()));
+  }
 
   Serial.println("Leave setup...");
 }

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <system_error>
 #include <type_traits>
 #include <functional>
 #include <cstring>
@@ -15,94 +14,6 @@
 //
 // **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
 
-
-enum class SerializerStatus : uint8_t
-{
-  success = 0,
-  writeOutOfRange
-};
-
-enum class DeserializerStatus : uint8_t
-{
-  success = 0,
-  readOutOfRange,
-  viewOutOfRange,
-  readStringOutOfRange,
-  viewStringSizeOutOfRange,
-  readStringOutIsNullptr,
-  readIsEnumFunIsNullptr
-};
-
-namespace std
-{
-  // Tell the C++ STL metaprogramming that enum SerializerStatus
-  // is registered with the standard error code system
-  template<> struct is_error_code_enum<SerializerStatus> : true_type
-  {};
-
-  // Tell the C++ STL metaprogramming that enum DeserializerStatus
-  // is registered with the standard error code system
-  template<> struct is_error_code_enum<DeserializerStatus> : true_type
-  {};
-}
-
-namespace detail
-{
-  // Define a custom error code category derived from std::error_category
-  class SerializerStatus_category : public std::error_category
-  {
-    private:
-      const char* messageImpl(int in_code) const
-      {
-        switch (static_cast<SerializerStatus>(in_code))
-        {
-          case SerializerStatus::success:         return "operation successful";
-          case SerializerStatus::writeOutOfRange: return "write operation out of range";
-          default:                                return "unknown";
-        }
-      }
-
-    public:
-      // Return a short descriptive name for the category
-      const char* name() const noexcept override final
-      {
-        return "SerializerStatus";
-      }
-
-      // Return what each enum means in text as std::string
-      std::string message(int in_code) const override final
-      {
-        return messageImpl(in_code);
-      }
-
-      // Return what each enum means in text as Arduino::String
-      String messageString(int in_code) const
-      {
-        return messageImpl(in_code);
-      }
-  };
-}
-
-// Define the linkage for this function to be used by external code.
-// This would be the usual __declspec(dllexport) or __declspec(dllimport)
-// if we were in a Windows DLL etc. But for this example use a global
-// instance but with inline linkage so multiple definitions do not collide.
-
-// Declare a global function returning a static instance of the custom category
-extern inline const detail::SerializerStatus_category& SerializerStatus_category()
-{
-  static detail::SerializerStatus_category category;
-  return category;
-}
-
-
-// Overload the global make_error_code() free function with our
-// custom enum. It will be found via ADL by the compiler if needed.
-inline std::error_code make_error_code(SerializerStatus in_errorCode)
-{
-  return { static_cast<int>(in_errorCode), SerializerStatus_category() };
-}
-
 namespace halvoe
 {
   template<typename SizeType>
@@ -114,6 +25,54 @@ namespace halvoe
            std::is_same<SizeType, uint32_t>::value ||
            std::is_same<SizeType, uint64_t>::value;
   }
+
+  enum class SerializerStatus : uint8_t
+  {
+    success = 0,
+    writeOutOfRange
+  };
+
+  enum class DeserializerStatus : uint8_t
+  {
+    success = 0,
+    readOutOfRange,
+    viewOutOfRange,
+    readStringOutOfRange,
+    viewStringSizeOutOfRange,
+    readStringOutIsNullptr,
+    readIsEnumFunIsNullptr,
+    readIsEnumFunFalse
+  };
+
+  class StatusPrinter
+  {
+    public:
+      static const char* message(SerializerStatus in_code)
+      {
+        switch (in_code)
+        {
+          case SerializerStatus::success:         return "operation successful";
+          case SerializerStatus::writeOutOfRange: return "write operation out of range";
+          default:                                return "invalid SerializerStatus";
+        }
+      }
+
+      static const char* message(DeserializerStatus in_code)
+      {
+        switch (in_code)
+        {
+          case DeserializerStatus::success:                  return "operation successful";
+          case DeserializerStatus::readOutOfRange:           return "read operation out of range";
+          case DeserializerStatus::viewOutOfRange:           return "view operation out of range";
+          case DeserializerStatus::readStringOutOfRange:     return "read string operation out of range";
+          case DeserializerStatus::viewStringSizeOutOfRange: return "view string size is out of range";
+          case DeserializerStatus::readStringOutIsNullptr:   return "read string out_parameter is nullptr";
+          case DeserializerStatus::readIsEnumFunIsNullptr:   return "read isEnum function is nullptr";
+          case DeserializerStatus::readIsEnumFunFalse:       return "read isEnum function returned false";
+          default:                                           return "invalid SerializerStatus";
+        }
+      }
+  };
   
   template<typename Type>
   class SerializerReference
@@ -124,32 +83,26 @@ namespace halvoe
     private:
       Type* m_element; // ToDo: Maybe change to "Type* const"?!?
     
-    public:
-      SerializerReference() : m_element(nullptr)
-      {}
-      
+    private:
+      // in_element must NOT be nullptr!
       SerializerReference(Type* in_element) : m_element(in_element)
       {}
-      
-      bool isNull() const
-      {
-        return m_element == nullptr;
-      }
+
+    public:
+      SerializerReference() = delete;
       
       Type read() const
       {
-        if (m_element == nullptr) { return 0; }
-        
         return *m_element;
       }
       
-      bool write(Type in_value)
+      void write(Type in_value)
       {
-        if (m_element == nullptr) { return false; }
-        
         *m_element = in_value;
-        return true;
       }
+
+      template<size_t tc_bufferSize>
+      friend class Serializer;
   };
 
   template<size_t tc_bufferSize>
@@ -217,7 +170,7 @@ namespace halvoe
       }
 
       template<typename Type>
-      tl::expected<SerializerReference<Type>, std::error_code> skip()
+      tl::expected<SerializerReference<Type>, SerializerStatus> skip()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
         if (m_cursor + sizeof(Type) > tc_bufferSize) { return tl::make_unexpected(SerializerStatus::writeOutOfRange); }
@@ -228,7 +181,7 @@ namespace halvoe
       }
 
       template<typename Type>
-      std::error_code write(Type in_value)
+      SerializerStatus write(Type in_value)
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
         if (m_cursor + sizeof(Type) > tc_bufferSize) { return SerializerStatus::writeOutOfRange; }
@@ -239,7 +192,7 @@ namespace halvoe
       }
 
       template<typename Type>
-      std::error_code writeEnum(Type in_value)
+      SerializerStatus writeEnum(Type in_value)
       {
         using UnderlyingType = typename std::underlying_type<Type>::type;
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
@@ -251,7 +204,7 @@ namespace halvoe
       }
       
       template<typename SizeType>
-      std::error_code write(const char* in_string, SizeType in_size)
+      SerializerStatus write(const char* in_string, SizeType in_size)
       {
         static_assert(isSizeType<SizeType>(), "SizeType must be an unsigned int!");
         if (m_cursor + sizeof(SizeType) + in_size > tc_bufferSize) { return SerializerStatus::writeOutOfRange; }
@@ -260,35 +213,6 @@ namespace halvoe
         std::memcpy(m_begin + m_cursor, in_string, in_size);
         m_cursor = m_cursor + in_size;
         return SerializerStatus::success;
-      }
-  };
-  
-  template<typename Type>
-  class DeserializerReference
-  {
-    static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-    static_assert(not std::is_enum<Type>::value, "Type must not be an enum!");
-    
-    private:
-      const Type* m_element; // ToDo: Maybe change to "const Type* const"?!?
-    
-    public:
-      DeserializerReference() : m_element(nullptr)
-      {}
-      
-      DeserializerReference(const Type* in_element) : m_element(in_element)
-      {}
-      
-      bool isNull() const
-      {
-        return m_element == nullptr;
-      }
-      
-      Type read() const
-      {
-        if (m_element == nullptr) { return 0; }
-        
-        return *m_element;
       }
   };
   
@@ -347,20 +271,20 @@ namespace halvoe
       }
 
       template<typename Type>
-      bool skip()
+      DeserializerStatus skip()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) {return false; }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { return DeserializerStatus::readOutOfRange; }
 
         m_cursor = m_cursor + sizeof(Type);
-        return true;
+        return DeserializerStatus::success;
       }
 
       template<typename Type>
-      Type read()
+      tl::expected<Type, DeserializerStatus> read()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return 0; }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { return tl::make_unexpected(DeserializerStatus::readOutOfRange); }
         
         Type value = *reinterpret_cast<const Type*>(m_begin + m_cursor);
         m_cursor = m_cursor + sizeof(Type);
@@ -368,41 +292,29 @@ namespace halvoe
       }
 
       template<typename Type, typename UnderlyingType = typename std::underlying_type<Type>::type>
-      bool readEnum(Type& out_value, const std::function<bool(UnderlyingType)>& fun_isEnumValue)
+      tl::expected<Type, DeserializerStatus> readEnum(const std::function<bool(UnderlyingType)>& fun_isEnumValue)
       {
         static_assert(std::is_same<UnderlyingType, typename std::underlying_type_t<Type>>::value, "UnderlyingType is not underlying type of Type!");
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
-        if (fun_isEnumValue == nullptr) { return false; }
-        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { return false; }
+        if (fun_isEnumValue == nullptr) { return tl::make_unexpected(DeserializerStatus::readIsEnumFunIsNullptr); }
+        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { tl::make_unexpected(DeserializerStatus::readOutOfRange); }
         
         UnderlyingType value = *reinterpret_cast<const UnderlyingType*>(m_begin + m_cursor);
-        if (not fun_isEnumValue(value)) { return false; }
-        out_value = static_cast<Type>(value);
+        if (not fun_isEnumValue(value)) { return tl::make_unexpected(DeserializerStatus::readIsEnumFunFalse); }
         m_cursor = m_cursor + sizeof(UnderlyingType);
-        return true;
-      }
-      
-      template<typename Type>
-      const DeserializerReference<Type> view()
-      {
-        static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return DeserializerReference<Type>(); }
-        
-        DeserializerReference<Type> element(reinterpret_cast<const Type*>(m_begin + m_cursor));
-        m_cursor = m_cursor + sizeof(Type);
-        return element;
+        return static_cast<Type>(value);
       }
       
       template<typename SizeType>
-      SizeType read(SizeType in_maxStringSize, char* out_string)
+      tl::expected<SizeType, DeserializerStatus> read(SizeType in_maxStringSize, char* out_string)
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
-        if (out_string == nullptr) { return 0; }
-        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return 0; }
+        if (out_string == nullptr) { return tl::make_unexpected(DeserializerStatus::readStringOutIsNullptr); }
+        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return tl::make_unexpected(DeserializerStatus::readStringOutOfRange); }
         
-        auto sizeElement = view<SizeType>();
-        if (sizeElement.isNull()) { return 0; }
-        const SizeType size = sizeElement.read() < in_maxStringSize ? sizeElement.read() : in_maxStringSize - 1; 
+        auto sizeElement = read<SizeType>();
+        if (not sizeElement.has_value()) { return sizeElement; }
+        const SizeType size = sizeElement.value() < in_maxStringSize ? sizeElement.value() : in_maxStringSize - 1;
         
         std::memcpy(out_string, m_begin + m_cursor, size);
         out_string[size] = '\0';
