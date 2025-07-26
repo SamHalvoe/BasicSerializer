@@ -1,6 +1,7 @@
 #pragma once
 
 #include <type_traits>
+#include <utility>
 #include <functional>
 #include <cstring>
 
@@ -36,9 +37,8 @@ namespace halvoe
   {
     success = 0,
     readOutOfRange,
-    viewOutOfRange,
     readStringOutOfRange,
-    viewStringSizeOutOfRange,
+    readStringSizeOutOfRange,
     readStringOutIsNullptr,
     readIsEnumFunIsNullptr,
     readIsEnumFunFalse
@@ -63,9 +63,8 @@ namespace halvoe
         {
           case DeserializerStatus::success:                  return "operation successful";
           case DeserializerStatus::readOutOfRange:           return "read operation out of range";
-          case DeserializerStatus::viewOutOfRange:           return "view operation out of range";
           case DeserializerStatus::readStringOutOfRange:     return "read string operation out of range";
-          case DeserializerStatus::viewStringSizeOutOfRange: return "view string size is out of range";
+          case DeserializerStatus::readStringSizeOutOfRange: return "read string size operation out of range";
           case DeserializerStatus::readStringOutIsNullptr:   return "read string out_parameter is nullptr";
           case DeserializerStatus::readIsEnumFunIsNullptr:   return "read isEnum function is nullptr";
           case DeserializerStatus::readIsEnumFunFalse:       return "read isEnum function returned false";
@@ -204,7 +203,7 @@ namespace halvoe
       }
       
       template<typename SizeType>
-      SerializerStatus write(const char* in_string, SizeType in_size)
+      SerializerStatus writeStr(const char* in_string, SizeType in_size)
       {
         static_assert(isSizeType<SizeType>(), "SizeType must be an unsigned int!");
         if (m_cursor + sizeof(SizeType) + in_size > tc_bufferSize) { return SerializerStatus::writeOutOfRange; }
@@ -213,6 +212,14 @@ namespace halvoe
         std::memcpy(m_begin + m_cursor, in_string, in_size);
         m_cursor = m_cursor + in_size;
         return SerializerStatus::success;
+      }
+      
+      template<typename SizeType>
+      SerializerStatus writeStr(const String& in_string)
+      {
+        static_assert(sizeof(SizeType) >= sizeof(decltype(std::declval<String>().length())),
+                      "Size of SizeType must be equal or greater than size of the return type of String::length()!");
+        return write<SizeType>(in_string.c_str(), in_string.length());
       }
   };
   
@@ -306,20 +313,38 @@ namespace halvoe
       }
       
       template<typename SizeType>
-      tl::expected<SizeType, DeserializerStatus> read(SizeType in_maxStringSize, char* out_string)
+      tl::expected<SizeType, DeserializerStatus> readStr(SizeType in_maxStringSize, char* out_string)
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
         if (out_string == nullptr) { return tl::make_unexpected(DeserializerStatus::readStringOutIsNullptr); }
         if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return tl::make_unexpected(DeserializerStatus::readStringOutOfRange); }
         
         auto sizeElement = read<SizeType>();
-        if (not sizeElement.has_value()) { return sizeElement; }
+        if (not sizeElement.has_value()) { return tl::make_unexpected(DeserializerStatus::readStringSizeOutOfRange); }
         const SizeType size = sizeElement.value() < in_maxStringSize ? sizeElement.value() : in_maxStringSize - 1;
         
         std::memcpy(out_string, m_begin + m_cursor, size);
         out_string[size] = '\0';
         m_cursor = m_cursor + size;
         return size;
+      }
+      
+      template<typename SizeType>
+      tl::expected<String, DeserializerStatus> readStr(SizeType in_maxStringSize)
+      {
+        static_assert(sizeof(SizeType) >= sizeof(decltype(std::declval<String>().length())),
+                      "Size of SizeType must be equal or greater than size of the return type of String::length()!");
+        static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
+        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return tl::make_unexpected(DeserializerStatus::readStringOutOfRange); }
+        
+        auto sizeElement = read<SizeType>();
+        if (not sizeElement.has_value()) { return tl::make_unexpected(DeserializerStatus::readStringSizeOutOfRange); }
+        const SizeType size = sizeElement.value() < in_maxStringSize ? sizeElement.value() : in_maxStringSize - 1;
+        
+        String string;
+        string.copy(static_cast<const char*>(m_begin + m_cursor), size);
+        m_cursor = m_cursor + size;
+        return string;
       }
   };
 }
