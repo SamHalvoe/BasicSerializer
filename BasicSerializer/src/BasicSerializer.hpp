@@ -217,8 +217,8 @@ namespace halvoe
       template<typename SizeType>
       SerializerStatus writeStr(const String& in_string)
       {
-        static_assert(sizeof(SizeType) >= sizeof(decltype(std::declval<String>().length())),
-                      "Size of SizeType must be equal or greater than size of the return type of String::length()!");
+        static_assert(sizeof(SizeType) <= sizeof(decltype(std::declval<String>().length())),
+                      "Size of SizeType must be less than or equal to size of the String length type!");
         return write<SizeType>(in_string.c_str(), in_string.length());
       }
   };
@@ -332,8 +332,8 @@ namespace halvoe
       template<typename SizeType>
       tl::expected<String, DeserializerStatus> readStr(SizeType in_maxStringSize)
       {
-        static_assert(sizeof(SizeType) >= sizeof(decltype(std::declval<String>().length())),
-                      "Size of SizeType must be equal or greater than size of the return type of String::length()!");
+        static_assert(sizeof(SizeType) <= sizeof(decltype(std::declval<String>().length())),
+                      "Size of SizeType must be less than or equal to size of the String length type!");
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
         if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return tl::make_unexpected(DeserializerStatus::readStringOutOfRange); }
         
