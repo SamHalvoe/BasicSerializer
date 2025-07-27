@@ -29,7 +29,8 @@ namespace halvoe
   enum class SerializerStatus : uint8_t
   {
     success = 0,
-    writeOutOfRange
+    writeOutOfRange,
+    writeStringSizeOutOfRange
   };
 
   enum class DeserializerStatus : uint8_t
@@ -51,9 +52,10 @@ namespace halvoe
       {
         switch (in_code)
         {
-          case SerializerStatus::success:         return "operation successful";
-          case SerializerStatus::writeOutOfRange: return "write operation out of range";
-          default:                                return "invalid SerializerStatus";
+          case SerializerStatus::success:                   return "operation successful";
+          case SerializerStatus::writeOutOfRange:           return "write operation out of range";
+          case SerializerStatus::writeStringSizeOutOfRange: return "write string size operation out of range";
+          default:                                          return "invalid SerializerStatus";
         }
       }
 
@@ -69,7 +71,7 @@ namespace halvoe
           case DeserializerStatus::stringAllocationFailed:   return "string allocation failed";
           case DeserializerStatus::readIsEnumFunIsNullptr:   return "read isEnum function is nullptr";
           case DeserializerStatus::readIsEnumFunFalse:       return "read isEnum function returned false";
-          default:                                           return "invalid SerializerStatus";
+          default:                                           return "invalid DeserializerStatus";
         }
       }
   };
@@ -209,7 +211,7 @@ namespace halvoe
         static_assert(isSizeType<SizeType>(), "SizeType must be an unsigned int!");
         if (m_cursor + sizeof(SizeType) + in_size > tc_bufferSize) { return SerializerStatus::writeOutOfRange; }
         
-        write<SizeType>(in_size);
+        if (write<SizeType>(in_size) != SerializerStatus::success) { return SerializerStatus::writeStringSizeOutOfRange; }
         std::memcpy(m_begin + m_cursor, in_string, in_size);
         m_cursor = m_cursor + in_size;
         return SerializerStatus::success;
@@ -218,7 +220,7 @@ namespace halvoe
       template<typename SizeType>
       SerializerStatus writeStr(const String& in_string)
       {
-        return write<SizeType>(in_string.c_str(), in_string.length());
+        return writeStr<SizeType>(in_string.c_str(), in_string.length());
       }
   };
   
@@ -336,11 +338,14 @@ namespace halvoe
         
         auto sizeElement = read<SizeType>();
         if (not sizeElement.has_value()) { return tl::make_unexpected(DeserializerStatus::readStringSizeOutOfRange); }
-        const SizeType size = sizeElement.value() < in_maxStringSize ? sizeElement.value() : in_maxStringSize - 1;
+        const SizeType size = sizeElement.value() <= in_maxStringSize ? sizeElement.value() : in_maxStringSize - 1;
         
+#if defined(ARDUINO_TEENSY41)
         String string;
-        if (not string.reserve(size)) { return tl::make_unexpected(DeserializerStatus::stringAllocationFailed); }
-        std::memcpy(string.begin(), m_begin + m_cursor, size);
+        string.copy(reinterpret_cast<const char*>(m_begin + m_cursor), size);
+#else
+        String string(reinterpret_cast<const char*>(m_begin + m_cursor), size);
+#endif
         m_cursor = m_cursor + size;
         return string;
       }
