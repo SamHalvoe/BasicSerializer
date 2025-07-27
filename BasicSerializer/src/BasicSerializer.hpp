@@ -1,7 +1,6 @@
 #pragma once
 
 #include <type_traits>
-#include <utility>
 #include <functional>
 #include <cstring>
 
@@ -40,6 +39,7 @@ namespace halvoe
     readStringOutOfRange,
     readStringSizeOutOfRange,
     readStringOutIsNullptr,
+    stringAllocationFailed,
     readIsEnumFunIsNullptr,
     readIsEnumFunFalse
   };
@@ -66,6 +66,7 @@ namespace halvoe
           case DeserializerStatus::readStringOutOfRange:     return "read string operation out of range";
           case DeserializerStatus::readStringSizeOutOfRange: return "read string size operation out of range";
           case DeserializerStatus::readStringOutIsNullptr:   return "read string out_parameter is nullptr";
+          case DeserializerStatus::stringAllocationFailed:   return "string allocation failed";
           case DeserializerStatus::readIsEnumFunIsNullptr:   return "read isEnum function is nullptr";
           case DeserializerStatus::readIsEnumFunFalse:       return "read isEnum function returned false";
           default:                                           return "invalid SerializerStatus";
@@ -217,8 +218,6 @@ namespace halvoe
       template<typename SizeType>
       SerializerStatus writeStr(const String& in_string)
       {
-        static_assert(sizeof(SizeType) <= sizeof(decltype(std::declval<String>().length())),
-                      "Size of SizeType must be less than or equal to size of the String length type!");
         return write<SizeType>(in_string.c_str(), in_string.length());
       }
   };
@@ -332,8 +331,6 @@ namespace halvoe
       template<typename SizeType>
       tl::expected<String, DeserializerStatus> readStr(SizeType in_maxStringSize)
       {
-        static_assert(sizeof(SizeType) <= sizeof(decltype(std::declval<String>().length())),
-                      "Size of SizeType must be less than or equal to size of the String length type!");
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
         if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return tl::make_unexpected(DeserializerStatus::readStringOutOfRange); }
         
@@ -342,7 +339,8 @@ namespace halvoe
         const SizeType size = sizeElement.value() < in_maxStringSize ? sizeElement.value() : in_maxStringSize - 1;
         
         String string;
-        string.copy(static_cast<const char*>(m_begin + m_cursor), size);
+        if (not string.reserve(size)) { return tl::make_unexpected(DeserializerStatus::stringAllocationFailed); }
+        std::memcpy(string.begin(), m_begin + m_cursor, size);
         m_cursor = m_cursor + size;
         return string;
       }
