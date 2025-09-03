@@ -19,6 +19,9 @@ std::array<uint8_t, stringBufferSize> stringBuffer;
 // The setup() function runs once each time the micro-controller starts
 void setup()
 {
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
+
 #if not defined(ARDUINO_TEENSY41)
   Serial.begin();
 #endif
@@ -36,9 +39,24 @@ void setup()
     ref.value().write(1024);
   }
   
-  Serial.println(StatusPrinter::message(serializer.write<uint32_t>(32)));
-  Serial.println(StatusPrinter::message(serializer.write<uint32_t>(32)));
+  if (auto result = serializer.write<uint32_t>(32); result.has_value())
+  {
+    Serial.println(StatusPrinter::message(SerializerStatus::success));
+  }
+  else
+  {
+    Serial.println(StatusPrinter::message(result.error()));
+  }
   
+  if (auto result = serializer.write<uint32_t>(32); result.has_value())
+  {
+    Serial.println(StatusPrinter::message(SerializerStatus::success));
+  }
+  else
+  {
+    Serial.println(StatusPrinter::message(result.error()));
+  }
+
   // ---- Test: Deserializer
   Serial.println("Test: Deserializer");
 
@@ -85,8 +103,16 @@ void setup()
 
   String inString("Halvoe Test");
   Serializer<stringBufferSize> stringSerializer(stringBuffer.data());
-  Serial.println(StatusPrinter::message(stringSerializer.writeStr<size_t>(inString))); // should succed
-  //Serial.println(StatusPrinter::message(stringSerializer.writeStr<size_t>(inString))); // should fail
+
+  if (stringSerializer.writeStr<size_t>(inString).has_value()) // should succed
+  {
+    Serial.println(StatusPrinter::message(SerializerStatus::success));
+  }
+
+  if (auto result = stringSerializer.writeStr<size_t>(inString); not result.has_value()) // should fail
+  {
+    Serial.println(StatusPrinter::message(result.error()));
+  }
   
   // ---- Test: Deserializer (String I)
   Serial.println("Test: Deserializer (String I)");

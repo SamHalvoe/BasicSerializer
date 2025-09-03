@@ -30,7 +30,7 @@ namespace halvoe
   {
     success = 0,
     writeOutOfRange,
-    writeStringSizeOutOfRange
+    writeStringOutOfRange
   };
 
   enum class DeserializerStatus : uint8_t
@@ -52,10 +52,10 @@ namespace halvoe
       {
         switch (in_code)
         {
-          case SerializerStatus::success:                   return "operation successful";
-          case SerializerStatus::writeOutOfRange:           return "write operation out of range";
-          case SerializerStatus::writeStringSizeOutOfRange: return "write string size operation out of range";
-          default:                                          return "invalid SerializerStatus";
+          case SerializerStatus::success:               return "operation successful";
+          case SerializerStatus::writeOutOfRange:       return "write operation out of range";
+          case SerializerStatus::writeStringOutOfRange: return "write string operation out of range";
+          default:                                      return "invalid SerializerStatus";
         }
       }
 
@@ -183,42 +183,42 @@ namespace halvoe
       }
 
       template<typename Type>
-      SerializerStatus write(Type in_value)
+      tl::expected<size_t, SerializerStatus> write(Type in_value)
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return SerializerStatus::writeOutOfRange; }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { return tl::make_unexpected(SerializerStatus::writeOutOfRange); }
 
         *reinterpret_cast<Type*>(m_begin + m_cursor) = in_value;
         m_cursor = m_cursor + sizeof(Type);
-        return SerializerStatus::success;
+        return m_cursor;
       }
 
       template<typename Type>
-      SerializerStatus writeEnum(Type in_value)
+      tl::expected<size_t, SerializerStatus> writeEnum(Type in_value)
       {
         using UnderlyingType = typename std::underlying_type<Type>::type;
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
-        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { return SerializerStatus::writeOutOfRange; }
+        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { return tl::make_unexpected(SerializerStatus::writeOutOfRange); }
 
         *reinterpret_cast<UnderlyingType*>(m_begin + m_cursor) = static_cast<UnderlyingType>(in_value);
         m_cursor = m_cursor + sizeof(UnderlyingType);
-        return SerializerStatus::success;
+        return m_cursor;
       }
       
       template<typename SizeType>
-      SerializerStatus writeStr(const char* in_string, SizeType in_size)
+      tl::expected<size_t, SerializerStatus> writeStr(const char* in_string, SizeType in_size)
       {
         static_assert(isSizeType<SizeType>(), "SizeType must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_size > tc_bufferSize) { return SerializerStatus::writeOutOfRange; }
+        if (m_cursor + sizeof(SizeType) + in_size > tc_bufferSize) { return tl::make_unexpected(SerializerStatus::writeStringOutOfRange); }
         
-        if (write<SizeType>(in_size) != SerializerStatus::success) { return SerializerStatus::writeStringSizeOutOfRange; }
+        if (not write<SizeType>(in_size).has_value()) { return tl::make_unexpected(SerializerStatus::writeOutOfRange); }
         std::memcpy(m_begin + m_cursor, in_string, in_size);
         m_cursor = m_cursor + in_size;
-        return SerializerStatus::success;
+        return m_cursor;
       }
       
       template<typename SizeType>
-      SerializerStatus writeStr(const String& in_string)
+      tl::expected<size_t, SerializerStatus> writeStr(const String& in_string)
       {
         return writeStr<SizeType>(in_string.c_str(), in_string.length());
       }
@@ -279,13 +279,13 @@ namespace halvoe
       }
 
       template<typename Type>
-      DeserializerStatus skip()
+      tl::expected<size_t, DeserializerStatus> skip()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return DeserializerStatus::readOutOfRange; }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { return tl::make_unexpected(DeserializerStatus::readOutOfRange); }
 
         m_cursor = m_cursor + sizeof(Type);
-        return DeserializerStatus::success;
+        return m_cursor;
       }
 
       template<typename Type>
