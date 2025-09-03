@@ -339,7 +339,7 @@ namespace halvoe
         return value;
       }
 
-      template<typename Type, typename UnderlyingType = typename std::underlying_type<Type>::type>
+      template<typename Type, typename UnderlyingType>
       tl::expected<Type, DeserializerStatus> readEnum(const std::function<bool(UnderlyingType)>& fun_isEnumValue)
       {
         static_assert(std::is_same<UnderlyingType, typename std::underlying_type_t<Type>>::value, "UnderlyingType is not underlying type of Type!");

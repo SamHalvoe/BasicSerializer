@@ -10,6 +10,12 @@
 
 using namespace halvoe;
 
+enum class TestEnum : uint16_t
+{
+  abc = 0,
+  xyz
+};
+
 const size_t bufferSize = 8;
 std::array<uint8_t, bufferSize> buffer;
 
@@ -71,9 +77,18 @@ void setup()
     Serial.println(StatusPrinter::message(result.error()));
   }
 
-  if (auto result = deserializer.read<uint16_t>(); result.has_value())
+  /*if (auto result = deserializer.read<uint16_t>(); result.has_value())
   {
     Serial.println(result.value());
+  }
+  else
+  {
+    Serial.println(StatusPrinter::message(result.error()));
+  }*/
+
+  if (auto result = deserializer.readEnum<TestEnum, uint16_t>([](uint16_t in_arg) { return false; }); result.has_value())
+  {
+    Serial.println("readEnum: Success!");
   }
   else
   {
