@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Arduino.h>
+
 #include <type_traits>
 #include <functional>
 #include <cstring>
