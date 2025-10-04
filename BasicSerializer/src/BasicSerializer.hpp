@@ -48,6 +48,18 @@ namespace halvoe
     readIsEnumFunFalse
   };
 
+  template<typename ExpectedType>
+  SerializerStatus getStatusFromExpected(const tl::expected<ExpectedType, SerializerStatus>& in_expected)
+  {
+    return in_expected.has_value() ? SerializerStatus::success : in_expected.error();
+  }
+
+  template<typename ExpectedType>
+  DeserializerStatus getStatusFromExpected(const tl::expected<ExpectedType, DeserializerStatus>& in_expected)
+  {
+    return in_expected.has_value() ? DeserializerStatus::success : in_expected.error();
+  }
+
   class StatusPrinter
   {
     public:
