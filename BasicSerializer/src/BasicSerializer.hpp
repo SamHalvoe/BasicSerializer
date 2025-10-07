@@ -132,7 +132,13 @@ namespace halvoe
       SerializerStatus m_status = SerializerStatus::success; // contains last error status
 
     private:
-      tl::unexpected<SerializerStatus> error(SerializerStatus in_error)
+      inline SerializerStatus error(SerializerStatus in_error)
+      {
+        m_status = in_error;
+        return m_status;
+      }
+      
+      inline tl::unexpected<SerializerStatus> make_error(SerializerStatus in_error)
       {
         m_status = in_error;
         return tl::make_unexpected(in_error);
@@ -207,10 +213,10 @@ namespace halvoe
       }
 
       template<typename Type>
-      tl::expected<SerializerReference<Type>, SerializerStatus> skip()
+      tl::expected<SerializerReference<Type>, SerializerStatus> reserve()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return error(SerializerStatus::writeOutOfRange); }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { return make_error(SerializerStatus::writeOutOfRange); }
         
         SerializerReference<Type> element(reinterpret_cast<Type*>(m_begin + m_cursor));
         m_cursor = m_cursor + sizeof(Type);
@@ -218,18 +224,18 @@ namespace halvoe
       }
 
       template<typename Type>
-      tl::expected<size_t, SerializerStatus> write(Type in_value)
+      SerializerStatus write(Type in_value)
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
         if (m_cursor + sizeof(Type) > tc_bufferSize) { return error(SerializerStatus::writeOutOfRange); }
 
         *reinterpret_cast<Type*>(m_begin + m_cursor) = in_value;
         m_cursor = m_cursor + sizeof(Type);
-        return m_cursor;
+        return SerializerStatus::success;
       }
 
       template<typename Type>
-      tl::expected<size_t, SerializerStatus> writeEnum(Type in_value)
+      SerializerStatus writeEnum(Type in_value)
       {
         using UnderlyingType = typename std::underlying_type<Type>::type;
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
@@ -237,23 +243,23 @@ namespace halvoe
 
         *reinterpret_cast<UnderlyingType*>(m_begin + m_cursor) = static_cast<UnderlyingType>(in_value);
         m_cursor = m_cursor + sizeof(UnderlyingType);
-        return m_cursor;
+        return SerializerStatus::success;
       }
       
       template<typename SizeType>
-      tl::expected<size_t, SerializerStatus> writeStr(const char* in_string, SizeType in_size)
+      SerializerStatus writeStr(const char* in_string, SizeType in_size)
       {
         static_assert(isSizeType<SizeType>(), "SizeType must be an unsigned int!");
         if (m_cursor + sizeof(SizeType) + in_size > tc_bufferSize) { return error(SerializerStatus::writeStringOutOfRange); }
         
-        if (not write<SizeType>(in_size).has_value()) { return error(SerializerStatus::writeStringSizeOutOfRange); }
+        if (write<SizeType>(in_size) != SerializerStatus::success) { return error(SerializerStatus::writeStringSizeOutOfRange); }
         std::memcpy(m_begin + m_cursor, in_string, in_size);
         m_cursor = m_cursor + in_size;
-        return m_cursor;
+        return SerializerStatus::success;
       }
       
       template<typename SizeType>
-      tl::expected<size_t, SerializerStatus> writeStr(const String& in_string)
+      SerializerStatus writeStr(const String& in_string)
       {
         return writeStr<SizeType>(in_string.c_str(), in_string.length());
       }
@@ -268,7 +274,13 @@ namespace halvoe
       DeserializerStatus m_status = DeserializerStatus::success; // contains last error status
 
     private:
-      tl::unexpected<DeserializerStatus> error(DeserializerStatus in_error)
+      inline DeserializerStatus error(DeserializerStatus in_error)
+      {
+        m_status = in_error;
+        return m_status;
+      }
+
+      inline tl::unexpected<DeserializerStatus> make_error(DeserializerStatus in_error)
       {
         m_status = in_error;
         return tl::make_unexpected(in_error);
@@ -333,20 +345,20 @@ namespace halvoe
       }
 
       template<typename Type>
-      tl::expected<size_t, DeserializerStatus> skip()
+      DeserializerStatus discard()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
         if (m_cursor + sizeof(Type) > tc_bufferSize) { return error(DeserializerStatus::readOutOfRange); }
 
         m_cursor = m_cursor + sizeof(Type);
-        return m_cursor;
+        return DeserializerStatus::success;
       }
 
       template<typename Type>
       tl::expected<Type, DeserializerStatus> read()
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return error(DeserializerStatus::readOutOfRange); }
+        if (m_cursor + sizeof(Type) > tc_bufferSize) { return make_error(DeserializerStatus::readOutOfRange); }
         
         Type value = *reinterpret_cast<const Type*>(m_begin + m_cursor);
         m_cursor = m_cursor + sizeof(Type);
@@ -358,11 +370,11 @@ namespace halvoe
       {
         static_assert(std::is_same<UnderlyingType, typename std::underlying_type_t<Type>>::value, "UnderlyingType is not underlying type of Type!");
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
-        if (fun_isEnumValue == nullptr) { return error(DeserializerStatus::readIsEnumFunIsNullptr); }
-        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { error(DeserializerStatus::readOutOfRange); }
+        if (fun_isEnumValue == nullptr) { return make_error(DeserializerStatus::readIsEnumFunIsNullptr); }
+        if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { make_error(DeserializerStatus::readOutOfRange); }
         
         UnderlyingType value = *reinterpret_cast<const UnderlyingType*>(m_begin + m_cursor);
-        if (not fun_isEnumValue(value)) { return error(DeserializerStatus::readIsEnumFunFalse); }
+        if (not fun_isEnumValue(value)) { return make_error(DeserializerStatus::readIsEnumFunFalse); }
         m_cursor = m_cursor + sizeof(UnderlyingType);
         return static_cast<Type>(value);
       }
@@ -371,11 +383,11 @@ namespace halvoe
       tl::expected<SizeType, DeserializerStatus> readStr(SizeType in_maxStringSize, char* out_string)
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
-        if (out_string == nullptr) { return error(DeserializerStatus::readStringOutIsNullptr); }
-        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return error(DeserializerStatus::readStringOutOfRange); }
+        if (out_string == nullptr) { return make_error(DeserializerStatus::readStringOutIsNullptr); }
+        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return make_error(DeserializerStatus::readStringOutOfRange); }
         
         auto sizeElement = read<SizeType>();
-        if (not sizeElement.has_value()) { return error(DeserializerStatus::readStringSizeOutOfRange); }
+        if (not sizeElement.has_value()) { return make_error(DeserializerStatus::readStringSizeOutOfRange); }
         const SizeType size = sizeElement.value() < in_maxStringSize ? sizeElement.value() : in_maxStringSize - 1;
         
         std::memcpy(out_string, m_begin + m_cursor, size);
@@ -388,13 +400,13 @@ namespace halvoe
       tl::expected<String, DeserializerStatus> readStr(SizeType in_maxStringSize)
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
-        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return error(DeserializerStatus::readStringOutOfRange); }
+        if (m_cursor + sizeof(SizeType) + in_maxStringSize > tc_bufferSize) { return make_error(DeserializerStatus::readStringOutOfRange); }
         
         auto sizeElement = read<SizeType>();
-        if (not sizeElement.has_value()) { return error(DeserializerStatus::readStringSizeOutOfRange); }
+        if (not sizeElement.has_value()) { return make_error(DeserializerStatus::readStringSizeOutOfRange); }
         const SizeType size = sizeElement.value() <= in_maxStringSize ? sizeElement.value() : in_maxStringSize - 1;
         
-#if defined(ARDUINO_TEENSY41)
+#if defined(CORE_TEENSY)
         String string;
         string.copy(reinterpret_cast<const char*>(m_begin + m_cursor), size);
 #else
