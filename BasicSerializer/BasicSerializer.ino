@@ -39,29 +39,15 @@ void setup()
 
   Serializer<bufferSize> serializer(buffer.data());
   serializer.write<uint8_t>(8);
-  auto ref = serializer.skip<uint16_t>();
+  auto ref = serializer.reserve<uint16_t>();
   if (ref.has_value())
   {
     ref.value().write(1024);
   }
   
-  if (auto result = serializer.write<uint32_t>(32); result.has_value())
-  {
-    Serial.println(StatusPrinter::message(SerializerStatus::success));
-  }
-  else
-  {
-    Serial.println(StatusPrinter::message(result.error()));
-  }
-  
-  if (auto result = serializer.write<uint32_t>(32); result.has_value())
-  {
-    Serial.println(StatusPrinter::message(SerializerStatus::success));
-  }
-  else
-  {
-    Serial.println(StatusPrinter::message(result.error()));
-  }
+  Serial.println(StatusPrinter::message(serializer.write<uint32_t>(32)));
+  Serial.println(StatusPrinter::message(serializer.write<uint32_t>(32)));
+  Serial.println(StatusPrinter::message(serializer.writeEnum<TestEnum>(TestEnum::abc)));
 
   // ---- Test: Deserializer
   Serial.println("Test: Deserializer");
@@ -119,15 +105,8 @@ void setup()
   String inString("Halvoe Test");
   Serializer<stringBufferSize> stringSerializer(stringBuffer.data());
 
-  if (stringSerializer.writeStr<size_t>(inString).has_value()) // should succed
-  {
-    Serial.println(StatusPrinter::message(SerializerStatus::success));
-  }
-
-  if (auto result = stringSerializer.writeStr<size_t>(inString); not result.has_value()) // should fail
-  {
-    Serial.println(StatusPrinter::message(result.error()));
-  }
+  Serial.println(StatusPrinter::message(stringSerializer.writeStr<size_t>(inString))); // should succed
+  Serial.println(StatusPrinter::message(stringSerializer.writeStr<size_t>(inString))); // should fail
   
   // ---- Test: Deserializer (String I)
   Serial.println("Test: Deserializer (String I)");
@@ -135,7 +114,7 @@ void setup()
   Deserializer<stringBufferSize> stringDeserializer(stringBuffer.data());
   
   std::array<char, stringBufferSize> strArray;
-  if (auto result = stringDeserializer.readStr<size_t>(inString.length() + 1, strArray.data()); result.has_value())
+  if (auto result = stringDeserializer.readStr<size_t>(strArray.data(), inString.length() + 1); result.has_value())
   {
     Serial.println(result.value());
     Serial.println(strArray.data());

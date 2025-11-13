@@ -10,8 +10,8 @@
 
 // **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
 //
-// NOTE: Serializer, Deserializer, SerializerReference and DeserializerReference are only
-//       valid until your underlying buffer (of uint8_t*) expires.
+// NOTE: Serializer, Deserializer and SerializerReference are only
+//       valid until your underlying buffer (of uint8_t* / const uint8_t*) expires.
 //       When the underlying buffer is gone, use of these types will cause undefined behaviour!
 //
 // **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
@@ -33,7 +33,8 @@ namespace halvoe
     success = 0,
     writeOutOfRange,
     writeStringOutOfRange,
-    writeStringSizeOutOfRange
+    writeStringSizeOutOfRange,
+    writeStringIsNullptr
   };
 
   enum class DeserializerStatus : uint8_t
@@ -43,6 +44,7 @@ namespace halvoe
     readStringOutOfRange,
     readStringSizeOutOfRange,
     readStringOutIsNullptr,
+    readStringSizeLessThanSpecified,
     stringAllocationFailed,
     readIsEnumFunIsNullptr,
     readIsEnumFunFalse
@@ -71,6 +73,7 @@ namespace halvoe
           case SerializerStatus::writeOutOfRange:           return "write operation out of range";
           case SerializerStatus::writeStringOutOfRange:     return "write string operation out of range";
           case SerializerStatus::writeStringSizeOutOfRange: return "write string size operation out of range";
+          case SerializerStatus::writeStringIsNullptr:      return "write string string is nullptr";
           default:                                          return "invalid SerializerStatus";
         }
       }
@@ -79,15 +82,16 @@ namespace halvoe
       {
         switch (in_code)
         {
-          case DeserializerStatus::success:                  return "operation successful";
-          case DeserializerStatus::readOutOfRange:           return "read operation out of range";
-          case DeserializerStatus::readStringOutOfRange:     return "read string operation out of range";
-          case DeserializerStatus::readStringSizeOutOfRange: return "read string size operation out of range";
-          case DeserializerStatus::readStringOutIsNullptr:   return "read string out_parameter is nullptr";
-          case DeserializerStatus::stringAllocationFailed:   return "string allocation failed";
-          case DeserializerStatus::readIsEnumFunIsNullptr:   return "read isEnum function is nullptr";
-          case DeserializerStatus::readIsEnumFunFalse:       return "read isEnum function returned false";
-          default:                                           return "invalid DeserializerStatus";
+          case DeserializerStatus::success:                         return "operation successful";
+          case DeserializerStatus::readOutOfRange:                  return "read operation out of range";
+          case DeserializerStatus::readStringOutOfRange:            return "read string operation out of range";
+          case DeserializerStatus::readStringSizeOutOfRange:        return "read string size operation out of range";
+          case DeserializerStatus::readStringOutIsNullptr:          return "read string out_parameter is nullptr";
+          case DeserializerStatus::readStringSizeLessThanSpecified: return "read string, size of created string less than specified size in buffer"; // reason could be out of memory
+          case DeserializerStatus::stringAllocationFailed:          return "string allocation failed";
+          case DeserializerStatus::readIsEnumFunIsNullptr:          return "read isEnum function is nullptr";
+          case DeserializerStatus::readIsEnumFunFalse:              return "read isEnum function returned false";
+          default:                                                  return "invalid DeserializerStatus";
         }
       }
   };
@@ -108,11 +112,6 @@ namespace halvoe
 
     public:
       SerializerReference() = delete;
-      
-      Type read() const
-      {
-        return *m_element;
-      }
       
       void write(Type in_value)
       {
@@ -229,7 +228,7 @@ namespace halvoe
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
         if (m_cursor + sizeof(Type) > tc_bufferSize) { return error(SerializerStatus::writeOutOfRange); }
 
-        *reinterpret_cast<Type*>(m_begin + m_cursor) = in_value;
+        std::memcpy(m_begin + m_cursor, &in_value, sizeof(in_value));
         m_cursor = m_cursor + sizeof(Type);
         return SerializerStatus::success;
       }
@@ -241,17 +240,32 @@ namespace halvoe
         static_assert(std::is_enum<Type>::value && std::is_arithmetic<UnderlyingType>::value, "Type must be an enum and underlying type must be arithmetic!");
         if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { return error(SerializerStatus::writeOutOfRange); }
 
-        *reinterpret_cast<UnderlyingType*>(m_begin + m_cursor) = static_cast<UnderlyingType>(in_value);
+        std::memcpy(m_begin + m_cursor, &in_value, sizeof(UnderlyingType));
         m_cursor = m_cursor + sizeof(UnderlyingType);
         return SerializerStatus::success;
       }
       
       template<typename SizeType>
+      SerializerStatus writeStr(const char* in_string)
+      {
+        static_assert(isSizeType<SizeType>(), "SizeType must be an unsigned int!");
+        if (in_string == nullptr) { return error(SerializerStatus::writeStringIsNullptr); }
+        size_t size = strnlen(in_string, getBytesLeft());
+        if (m_cursor + sizeof(SizeType) + size > tc_bufferSize) { return error(SerializerStatus::writeStringOutOfRange); }
+        
+        if (write<SizeType>(size) != SerializerStatus::success) { return error(SerializerStatus::writeStringSizeOutOfRange); }
+        std::memcpy(m_begin + m_cursor, in_string, size);
+        m_cursor = m_cursor + size;
+        return SerializerStatus::success;
+      }
+
+      template<typename SizeType>
       SerializerStatus writeStr(const char* in_string, SizeType in_size)
       {
         static_assert(isSizeType<SizeType>(), "SizeType must be an unsigned int!");
+        if (in_string == nullptr) { return error(SerializerStatus::writeStringIsNullptr); }
         if (m_cursor + sizeof(SizeType) + in_size > tc_bufferSize) { return error(SerializerStatus::writeStringOutOfRange); }
-        
+
         if (write<SizeType>(in_size) != SerializerStatus::success) { return error(SerializerStatus::writeStringSizeOutOfRange); }
         std::memcpy(m_begin + m_cursor, in_string, in_size);
         m_cursor = m_cursor + in_size;
@@ -373,14 +387,15 @@ namespace halvoe
         if (fun_isEnumValue == nullptr) { return make_error(DeserializerStatus::readIsEnumFunIsNullptr); }
         if (m_cursor + sizeof(UnderlyingType) > tc_bufferSize) { make_error(DeserializerStatus::readOutOfRange); }
         
-        UnderlyingType value = *reinterpret_cast<const UnderlyingType*>(m_begin + m_cursor);
+        UnderlyingType value = 0;
+        std::memcpy(&value, m_begin + m_cursor, sizeof(UnderlyingType));
         if (not fun_isEnumValue(value)) { return make_error(DeserializerStatus::readIsEnumFunFalse); }
         m_cursor = m_cursor + sizeof(UnderlyingType);
         return static_cast<Type>(value);
       }
       
       template<typename SizeType>
-      tl::expected<SizeType, DeserializerStatus> readStr(SizeType in_maxStringSize, char* out_string)
+      tl::expected<SizeType, DeserializerStatus> readStr(char* out_string, SizeType in_maxStringSize)
       {
         static_assert(isSizeType<SizeType>(), "Type must be an unsigned int!");
         if (out_string == nullptr) { return make_error(DeserializerStatus::readStringOutIsNullptr); }
@@ -394,6 +409,12 @@ namespace halvoe
         out_string[size] = '\0';
         m_cursor = m_cursor + size;
         return size;
+      }
+
+      template<typename SizeType>
+      tl::expected<SizeType, DeserializerStatus> readStr(char* out_string)
+      {
+        return readStr<SizeType>(out_string, getBytesLeft());
       }
       
       template<typename SizeType>
@@ -412,8 +433,15 @@ namespace halvoe
 #else
         String string(reinterpret_cast<const char*>(m_begin + m_cursor), size);
 #endif
+        if (string.length() < size) { return make_error(DeserializerStatus::readStringSizeLessThanSpecified); }
         m_cursor = m_cursor + size;
         return string;
+      }
+
+      template<typename SizeType>
+      tl::expected<SizeType, DeserializerStatus> readStr()
+      {
+        return readStr<SizeType>(getBytesLeft());
       }
   };
 }
