@@ -103,11 +103,11 @@ namespace halvoe
     static_assert(not std::is_enum<Type>::value, "Type must not be an enum!");
     
     private:
-      Type* m_element; // ToDo: Maybe change to "Type* const"?!?
+      unsigned char* m_destination; // ToDo: Maybe change to "unsigned char* const"?!?
     
     private:
-      // in_element must NOT be nullptr!
-      SerializerReference(Type* in_element) : m_element(in_element)
+      // in_destination must NOT be nullptr!
+      SerializerReference(unsigned char* in_destination) : m_destination(in_destination)
       {}
 
     public:
@@ -115,7 +115,7 @@ namespace halvoe
       
       void write(Type in_value)
       {
-        *m_element = in_value;
+        std::memcpy(m_destination, &in_value, sizeof(Type));
       }
 
       template<size_t tc_bufferSize>
@@ -217,7 +217,7 @@ namespace halvoe
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
         if (m_cursor + sizeof(Type) > tc_bufferSize) { return make_error(SerializerStatus::writeOutOfRange); }
         
-        SerializerReference<Type> element(reinterpret_cast<Type*>(m_begin + m_cursor));
+        SerializerReference<Type> element(m_begin + m_cursor);
         m_cursor = m_cursor + sizeof(Type);
         return element;
       }
@@ -228,7 +228,7 @@ namespace halvoe
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
         if (m_cursor + sizeof(Type) > tc_bufferSize) { return error(SerializerStatus::writeOutOfRange); }
 
-        std::memcpy(m_begin + m_cursor, &in_value, sizeof(in_value));
+        std::memcpy(m_begin + m_cursor, &in_value, sizeof(Type));
         m_cursor = m_cursor + sizeof(Type);
         return SerializerStatus::success;
       }
@@ -374,7 +374,8 @@ namespace halvoe
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
         if (m_cursor + sizeof(Type) > tc_bufferSize) { return make_error(DeserializerStatus::readOutOfRange); }
         
-        Type value = *reinterpret_cast<const Type*>(m_begin + m_cursor);
+        Type value = 0;
+        std::memcpy(&value, m_begin + m_cursor, sizeof(Type));
         m_cursor = m_cursor + sizeof(Type);
         return value;
       }
