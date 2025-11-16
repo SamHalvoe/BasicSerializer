@@ -28,6 +28,37 @@ namespace halvoe
            std::is_same<SizeType, uint64_t>::value;
   }
 
+  class StringFromBytes : public String
+  {
+    public:
+      StringFromBytes() = delete;
+
+      StringFromBytes(const unsigned char* in_bytes, unsigned int in_size) : String()
+      {
+        buffer = nullptr;
+        len = 0;
+        capacity = 0;
+
+        if (reserve(in_size))
+        {
+          len = in_size;
+          std::memcpy(buffer, in_bytes, in_size);
+          buffer[len] = '\0';
+        }
+        else
+        {
+          if (buffer)
+          {
+            free(buffer);
+            buffer = nullptr;
+          }
+
+          len = 0;
+          capacity = 0;
+        }
+      }
+  };
+
   enum class SerializerStatus : uint8_t
   {
     success = 0,
@@ -127,7 +158,7 @@ namespace halvoe
   {
     private:
       size_t m_cursor = 0;
-      unsigned char* m_begin; // ToDo: Maybe change to "unsigned char* const"?!?
+      unsigned char* m_begin;
       SerializerStatus m_status = SerializerStatus::success; // contains last error status
 
     private:
@@ -284,7 +315,7 @@ namespace halvoe
   {
     private:
       size_t m_cursor = 0;
-      const unsigned char* m_begin; // ToDo: Maybe change to "const unsigned char* const"?!?
+      const unsigned char* m_begin;
       DeserializerStatus m_status = DeserializerStatus::success; // contains last error status
 
     private:
@@ -428,8 +459,9 @@ namespace halvoe
         if (not sizeElement.has_value()) { return make_error(DeserializerStatus::readStringSizeOutOfRange); }
         const SizeType size = sizeElement.value() < in_maxStringSize ? sizeElement.value() : in_maxStringSize;
 
-        String string;
-        if (not string.concat(reinterpret_cast<const char*>(m_begin + m_cursor), size)) { return make_error(DeserializerStatus::readStringOutOfMemory); }
+        StringFromBytes string(m_begin + m_cursor, size);
+        if (not string) { return make_error(DeserializerStatus::readStringOutOfMemory); }
+
         m_cursor = m_cursor + size;
         return string;
       }
