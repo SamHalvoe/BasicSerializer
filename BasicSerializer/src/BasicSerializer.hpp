@@ -388,13 +388,13 @@ namespace halvoe
         return m_cursor + sizeof(Type) <= tc_bufferSize;
       }
 
-      template<typename Type>
-      DeserializerStatus discard()
+      template<typename Type = unsigned char>
+      DeserializerStatus discard(size_t in_size = 1)
       {
         static_assert(std::is_arithmetic<Type>::value, "Type must be arithmetic!");
-        if (m_cursor + sizeof(Type) > tc_bufferSize) { return error(DeserializerStatus::readOutOfRange); }
+        if (m_cursor + (sizeof(Type) * in_size) > tc_bufferSize) { return error(DeserializerStatus::readOutOfRange); }
 
-        m_cursor = m_cursor + sizeof(Type);
+        m_cursor = m_cursor + (sizeof(Type) * in_size);
         return DeserializerStatus::success;
       }
 
