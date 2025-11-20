@@ -62,6 +62,7 @@ namespace halvoe
   enum class SerializerStatus : uint8_t
   {
     success = 0,
+    none, // used to represent the absence of a state, for example when you cannot determine the status, but have to set/return a status
     writeOutOfRange,
     writeStringOutOfRange,
     writeStringIsNullptr,
@@ -71,6 +72,7 @@ namespace halvoe
   enum class DeserializerStatus : uint8_t
   {
     success = 0,
+    none, // used to represent the absence of a state, for example when you cannot determine the status, but have to set/return a status
     readOutOfRange,
     readStringOutOfRange,
     readStringOutIsNullptr,
@@ -100,6 +102,7 @@ namespace halvoe
         switch (in_code)
         {
           case SerializerStatus::success:                                  return "operation successful";
+          case SerializerStatus::none:                                     return "no status available";
           case SerializerStatus::writeOutOfRange:                          return "write operation out of range";
           case SerializerStatus::writeStringOutOfRange:                    return "write string operation out of range";
           case SerializerStatus::writeStringIsNullptr:                     return "write string string is nullptr";
@@ -113,6 +116,7 @@ namespace halvoe
         switch (in_code)
         {
           case DeserializerStatus::success:                  return "operation successful";
+          case DeserializerStatus::none:                     return "no status available";
           case DeserializerStatus::readOutOfRange:           return "read operation out of range";
           case DeserializerStatus::readStringOutOfRange:     return "read string operation out of range";
           case DeserializerStatus::readStringOutIsNullptr:   return "read string out_parameter is nullptr";
