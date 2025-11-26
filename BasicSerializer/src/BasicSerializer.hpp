@@ -6,7 +6,7 @@
 #include <functional>
 #include <cstring>
 
-#include <expected.hpp>
+#include <expected.hpp> // see https://github.com/TartanLlama/expected
 
 // **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
 //
